@@ -4,6 +4,26 @@ Requirements
 * Sphinx 0.9 or newer
 * FluxBB 1.4.x
 
+Setup FluxBB
+============
+* Add Sphinx configuration in FluxBB databases:
+~~~
+INSERT INTO `fluxbb_config` ( `conf_name`, `conf_value` ) VALUES ( 'sphinx_counter_posts', '0' );
+~~~
+* Add Sphinx configuration to your FluxBB's config.php:
+~~~
+// Sphinx
+$sphinx_config = array(
+    'host' => 'localhost', // Your sphinx server host
+    'port' => 3312, // Your sphinx server port
+    'idx_main' => 'fluxbb_search_posts_main', // Main search index
+    'idx_delta' => 'fluxbb_search_posts_delta', // Delta search index
+    'max_query_time' => 5000 // Timeout search queries after 5 seconds.
+);
+~~~
+* If Sphinx PHP API isn't on your system, [download it](http://code.google.com/p/sphinxsearch/source/browse/trunk/api/sphinxapi.php) and add it to include folder.
+* Add sphinx.php to include folder.
+
 Setup Sphinx
 ============
 * [Install Sphinx](http://sphinxsearch.com/docs/manual-0.9.9.html#installation) on your serveur (check if a package is avalaible for your distro).
@@ -23,7 +43,3 @@ Configure Cronjobs
 */15 * * * * /usr/bin/indexer --config /etc/sphinx.conf fluxbb_search_posts_delta --rotate
 0 4 * * * /usr/bin/indexer --config /etc/sphinx.conf --all --rotate
 ~~~
-
-Add Sphinx to FluxBB
-====================
-TODO
