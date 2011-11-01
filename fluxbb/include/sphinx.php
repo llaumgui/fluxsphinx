@@ -56,20 +56,24 @@ class fluxSphinx
 
 		// Load Sphinx from PECL
 		if ( $sphinx_config['use_pecl'] )
-			define( 'SPHINX_API_LOADED', true );
-
-		if ( !defined( 'SPHINX_API_LOADED' ) OR !SPHINX_API_LOADED )
 		{
-			$sphinxLoaded = @include PUN_ROOT.'include/sphinxapi.php';
-			if ( !$sphinxLoaded )
-			{
-				$sphinxLoaded = include 'sphinxapi.php';
-			}
-			define( 'SPHINX_API_LOADED', $sphinxLoaded );
+			define( 'SPHINX_API_LOADED', true );
 		}
+		else
+		{
+			if ( !defined( 'SPHINX_API_LOADED' ) OR !SPHINX_API_LOADED )
+			{
+				$sphinxLoaded = @include PUN_ROOT.'include/sphinxapi.php';
+				if ( !$sphinxLoaded )
+				{
+					$sphinxLoaded = include 'sphinxapi.php';
+				}
+				define( 'SPHINX_API_LOADED', $sphinxLoaded );
+			}
 
-		if ( !defined( 'SPHINX_API_LOADED' ) OR !SPHINX_API_LOADED )
-			error('Unable to load SphinxAPI', __FILE__, __LINE__ );
+			if ( !defined( 'SPHINX_API_LOADED' ) OR !SPHINX_API_LOADED )
+				error('Unable to load SphinxAPI', __FILE__, __LINE__ );
+		}
 
 		// Setup SphinxClient
 		$this->client = new SphinxClient;
@@ -100,9 +104,9 @@ class fluxSphinx
 	 */
 	public static function getInstance()
 	{
-	if ( is_null( self::$instance ) )
-	{
-		self::$instance = new fluxSphinx();
+		if ( is_null( self::$instance ) )
+		{
+			self::$instance = new fluxSphinx();
 		}
 		return self::$instance;
 	}
@@ -177,36 +181,33 @@ class fluxSphinx
 			case 0:
 				$this->sortBy = 'posted';
 				break;
-
 			// Author
 			case 1:
 				$this->sortBy = 'poster_id';
 				break;
-
 			// Subject
 			case 2:
 				$this->sortBy = 'tid';
 				break;
-
 			// Forums
 			case 3:
 				$this->sortBy = 'forum_id';
 				break;
-
 			// Last post
 			case 4:
 				$this->sortBy = 'last_post';
 				break;
-
+			// Relevance
 			default:
 				$this->sortBy = '@relevance';
 				break;
-			}
+		}
 
-			$this->client->SetSortMode( SPH_SORT_EXTENDED, $this->sortBy.' '.$this->sortDir );
+		$this->client->SetSortMode( SPH_SORT_EXTENDED, $this->sortBy.' '.$this->sortDir );
 
-			if ( $show_as == 'topics' )
-				$this->client->setGroupBy( 'tid', SPH_GROUPBY_ATTR, $this->sortBy.' '.$this->sortDir );
+		// GroupBy with sort
+		if ( $show_as == 'topics' )
+			$this->client->setGroupBy( 'tid', SPH_GROUPBY_ATTR, $this->sortBy.' '.$this->sortDir );
 	}
 
 
@@ -221,16 +222,18 @@ class fluxSphinx
 	{
 		global $sphinx_config;
 
-		// Search in field
+		// Search in message only
 		if ( $search_in == 1 )
 			$this->keywords = '@message '.$keywords;
+		// Search in subject only
 		else if ( $search_in == -1 )
 			$this->keywords = '@subject '.$keywords;
+		// Search in all (use weight)
 		else
 			$this->keywords = $keywords;
 
+		// Do search
 		$this->result = $this->client->query( $this->keywords, $sphinx_config['idx_main'].', '.$sphinx_config['idx_delta'] );
-
 		//var_dump( $this->result );
 	}
 
@@ -264,7 +267,27 @@ class fluxSphinx
 	 */
 	public function resultInfo()
 	{
-		return 'Search "<strong>'.$this->keywords.'</strong>" in <a href="http://www.sphinxsearch.com/" title="Sphinx Search Engine">Sphinx</a> index in <em>'.$this->result['time'].'s</em>.';
+		global $lang_sphinx, $pun_user;
+
+		if( !isset($lang_sphinx) AND isset($pun_user) )
+			require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
+
+
+		return $lang_sphinx['Search powered by Sphinx'] . ' ' . sprintf( $lang_sphinx['Search informations'], $this->keywords, $this->result['time'] );
+	}
+
+
+	/**
+	 * Text highlighter
+	 *
+	 * @param string $text
+	 */
+	public function highlight( &$text )
+	{
+		foreach ( $this->result['words'] as $word => $info )
+		{
+			$text = str_ireplace( $word, '<span class="highlight">'.$word.'</span>', $text);
+		}
 	}
 
 }

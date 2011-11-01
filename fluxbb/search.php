@@ -14,6 +14,7 @@ define('PUN_ROOT', dirname(__FILE__).'/');
 require PUN_ROOT.'include/common.php';
 
 // Load Sphinx
+session_start();
 require PUN_ROOT.'include/sphinx.php';
 require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
 
@@ -130,10 +131,15 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			if ($pun_user['last_search'] && (time() - $pun_user['last_search']) < $pun_user['g_search_flood'] && (time() - $pun_user['last_search']) >= 0)
 				message(sprintf($lang_search['Search flood'], $pun_user['g_search_flood']));
 
-			if (!$pun_user['is_guest'])
-				$db->query('UPDATE '.$db->prefix.'users SET last_search='.time().' WHERE id='.$pun_user['id']) or error('Unable to update user', __FILE__, __LINE__, $db->error());
-			else
-				$db->query('UPDATE '.$db->prefix.'online SET last_search='.time().' WHERE ident=\''.$db->escape(get_remote_address()).'\'' ) or error('Unable to update user', __FILE__, __LINE__, $db->error());
+			if( $keywords AND ( $keywords != $_SESSION['last_search'] OR !array_key_exists( 'last_search', $_SESSION ) ) )
+			{
+				if (!$pun_user['is_guest'])
+					$db->query('UPDATE '.$db->prefix.'users SET last_search='.time().' WHERE id='.$pun_user['id']) or error('Unable to update user', __FILE__, __LINE__, $db->error());
+				else
+					$db->query('UPDATE '.$db->prefix.'online SET last_search='.time().' WHERE ident=\''.$db->escape(get_remote_address()).'\'' ) or error('Unable to update user', __FILE__, __LINE__, $db->error());
+
+				$_SESSION['last_search'] = $keywords;
+			}
 
 			switch ($sort_by)
 			{
@@ -510,7 +516,12 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 		// Generate paging links
 		if ( fluxSphinx::$use === true )
-			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?action='.$action.'&amp;forums[]='.implode('&amp;forums[]=', $forums).'&amp;keywords='.$keywords.'&amp;author='.$author.'&amp;search_in='.$search_in.'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as);
+		{
+			$forums_link = '';
+			if ( !empty( $forums ) )
+				$forums_link .= '&amp;forums[]='.implode('&amp;forums[]=', $forums);
+			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?action='.$action .'&amp;keywords='.$keywords.'&amp;author='.$author.'&amp;search_in='.$search_in.'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as.$forums_link);
+		}
 		else
 		{
 			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?search_id='.$search_id);
@@ -661,6 +672,10 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 					$cur_search['message'] = censor_words($cur_search['message']);
 
 				$message = parse_message($cur_search['message'], $cur_search['hide_smilies']);
+				// Hightlight
+				if ( fluxSphinx::$use === true )
+					$sphinx->highlight( $message );
+
 				$pposter = pun_htmlspecialchars($cur_search['pposter']);
 
 				if ($cur_search['poster_id'] > 1)
