@@ -2,4 +2,4 @@ FluxSphinx is an implementation of the [Sphinx](http://sphinxsearch.com/) search
 
 FluxSphinx aims to provide an alternernative for the native FluxBB's search engine and provides a fulltext search for high-volume forums.
 
-Status: Work In Progress
+Status: Release candidat
