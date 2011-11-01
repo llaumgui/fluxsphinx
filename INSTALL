@@ -53,6 +53,7 @@ Step 4: Configure Cronjobs
 
 Step 5: Setup FluxBB
 ====================
+* Install SphinxClient from [Sphinx API PHP](http://code.google.com/p/sphinxsearch/source/browse/trunk/api/sphinxapi.php) (put on include folder) or [from PECL](http://pecl.php.net/package/sphinx).
 * Add Sphinx configuration to your FluxBB's config.php:
 ~~~
 // Sphinx
@@ -62,10 +63,10 @@ $sphinx_config = array(
     'idx_main' => 'fluxbb_search_posts_main', // Main search index
     'idx_delta' => 'fluxbb_search_posts_delta', // Delta search index
     'max_query_time' => 5000, // Timeout search queries after 5 seconds.
-    'weights' => array( 'message' => 10, 'subject' => 40 ) // Sets the weighting of certain columns
+    'weights' => array( 'message' => 10, 'subject' => 40 ), // Sets the weighting of certain columns
+    'use_pecl' => true // Use C client from PECL
 );
 ~~~
-* If Sphinx PHP API isn't on your system, [download it](http://code.google.com/p/sphinxsearch/source/browse/trunk/api/sphinxapi.php) and add it to include folder.
 * Add fluxbb/include/sphinx.php to __include__ folder.
 * Add fluxbb/lang to __lang__ folder.
 * Replace __search.php__ by fluxbb/search.php.
