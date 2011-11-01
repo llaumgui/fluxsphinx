@@ -3,6 +3,7 @@
 /**
  * Copyright (C) 2008-2011 FluxBB
  * based on code by Rickard Andersson copyright (C) 2002-2008 PunBB
+ * Modification to implement Sphinx Search Engine by Guillaume Kulakowski (C) 2011
  * License: http://www.gnu.org/licenses/gpl.html GPL version 2 or higher
  */
 
@@ -14,6 +15,7 @@ require PUN_ROOT.'include/common.php';
 
 // Load Sphinx
 require PUN_ROOT.'include/sphinx.php';
+require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
 
 // Load the search.php language file
 require PUN_ROOT.'lang/'.$pun_user['language'].'/search.php';
@@ -258,10 +260,11 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 				// Load Sphinx
 				$sphinx = fluxSphinx::getInstance();
-				$sphinx->setLimit( $show_as, $pun_user );
-				$sphinx->setGroupBy( $show_as );
-				$sphinx->setFilter( $forums );
 				fluxSphinx::$use = true;
+
+				$sphinx->setSortBy( $sort_by, $sort_dir, $show_as );
+				$sphinx->setForumsFilter( $forums );
+				$sphinx->setLimit( $show_as, $pun_user );
 			}
 
 			// If it's a search for author name (and that author name isn't Guest)
@@ -284,28 +287,29 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 					while ($row = $db->fetch_row($result))
 						$user_ids[] = $row[0];
 
-					$result = $db->query('SELECT p.id AS post_id, p.topic_id FROM '.$db->prefix.'posts AS p INNER JOIN '.$db->prefix.'topics AS t ON t.id=p.topic_id LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) AND p.poster_id IN('.implode(',', $user_ids).')'.$forum_sql.' ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch matched posts list', __FILE__, __LINE__, $db->error());
+					/*$result = $db->query('SELECT p.id AS post_id, p.topic_id FROM '.$db->prefix.'posts AS p INNER JOIN '.$db->prefix.'topics AS t ON t.id=p.topic_id LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) AND p.poster_id IN('.implode(',', $user_ids).')'.$forum_sql.' ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch matched posts list', __FILE__, __LINE__, $db->error());
 					while ($temp = $db->fetch_assoc($result))
-						$author_results[$temp['post_id']] = $temp['topic_id'];
+						$author_results[$temp['post_id']] = $temp['topic_id'];*/
 
 					$db->free_result($result);
+					// Do a fiulter by user
+					$sphinx->setAuthorsFilter( $user_ids );
 				}
 			}
 
-			// TODO use Sphinx
 			// If we searched for both keywords and author name we want the intersection between the results
-			if ($author && $keywords)
+			/*if ($author && $keywords)
 			{
 				$search_ids = array_intersect_assoc($keyword_results, $author_results);
 				$search_type = array('both', array($keywords, pun_trim($_GET['author'])), implode(',', $forums), $search_in);
 			}
-			else if ($keywords)
+			else */if ($keywords)
 			{
 				$sphinx->query( $keywords, $search_in );
 				$search_ids = $sphinx->toSearchIds();
 
 				$search_type = array('keywords', $keywords, implode(',', $forums), $search_in);
-				//var_dump( $search_ids );
+
 			}
 			else
 			{
@@ -322,14 +326,11 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 			$search_ids = array_unique($search_ids);
 
+			// Count with Sphinx
 			if( fluxSphinx::$use === true )
-			{
 				$num_hits = $sphinx->result['total_found'];
-			}
 			else
-			{
 				$num_hits = count($search_ids);
-			}
 
 			if (!$num_hits)
 				message($lang_search['No hits']);
@@ -437,7 +438,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 		$old_searches = array();
 		$result = $db->query('SELECT ident FROM '.$db->prefix.'online') or error('Unable to fetch online list', __FILE__, __LINE__, $db->error());
 
-		if ($db->num_rows($result))
+		/*if ($db->num_rows($result))
 		{
 			while ($row = $db->fetch_row($result))
 				$old_searches[] = '\''.$db->escape($row[0]).'\'';
@@ -461,15 +462,15 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 		$db->query('INSERT INTO '.$db->prefix.'search_cache (id, ident, search_data) VALUES('.$search_id.', \''.$db->escape($ident).'\', \''.$db->escape($temp).'\')') or error('Unable to insert search results', __FILE__, __LINE__, $db->error());
 
-		if ($search_type[0] != 'action' && fluxSphinx::$use !== true)
+		if ($search_type[0] != 'action')
 		{
 			$db->end_transaction();
 			$db->close();
 
 			// Redirect the user to the cached result page
-			header('Location: search2.php?search_id='.$search_id);
+			header('Location: search.php?search_id='.$search_id);
 			exit;
-		}
+		}*/
 	}
 
 	$forum_actions = array();
@@ -509,25 +510,20 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 		// Generate paging links
 		if ( fluxSphinx::$use === true )
-			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search2.php?action='.$action.'&amp;keywords='.$keywords.'&amp;author='.$author.'&amp;search_in='.$search_in.'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as);
+			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?action='.$action.'&amp;forums[]='.implode('&amp;forums[]=', $forums).'&amp;keywords='.$keywords.'&amp;author='.$author.'&amp;search_in='.$search_in.'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as);
 		else
-			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search2.php?search_id='.$search_id);
-
-		if ( fluxSphinx::$use !== true )
 		{
+			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?search_id='.$search_id);
+
 			// throw away the first $start_from of $search_ids, only keep the top $per_page of $search_ids
 			$search_ids = array_slice($search_ids, $start_from, $per_page);
 		}
 
 		// Run the query and fetch the results
 		if ($show_as == 'posts')
-		{
 			$result = $db->query('SELECT p.id AS pid, p.poster AS pposter, p.posted AS pposted, p.poster_id, p.message, p.hide_smilies, t.id AS tid, t.poster, t.subject, t.first_post_id, t.last_post, t.last_post_id, t.last_poster, t.num_replies, t.forum_id, f.forum_name FROM '.$db->prefix.'posts AS p INNER JOIN '.$db->prefix.'topics AS t ON t.id=p.topic_id INNER JOIN '.$db->prefix.'forums AS f ON f.id=t.forum_id WHERE p.id IN('.implode(',', $search_ids).') ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch search results', __FILE__, __LINE__, $db->error());
-		}
 		else
-		{
 			$result = $db->query('SELECT t.id AS tid, t.poster, t.subject, t.last_post, t.last_post_id, t.last_poster, t.num_replies, t.closed, t.sticky, t.forum_id, f.forum_name FROM '.$db->prefix.'topics AS t INNER JOIN '.$db->prefix.'forums AS f ON f.id=t.forum_id WHERE t.id IN('.implode(',', $search_ids).') ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch search results', __FILE__, __LINE__, $db->error());
-		}
 
 		$search_set = array();
 		while ($row = $db->fetch_assoc($result))
@@ -539,9 +535,9 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 		if ($search_type[0] == 'action')
 		{
 			if ($search_type[1] == 'show_user_topics')
-				$crumbs_text['search_type'] = '<a href="search2.php?action=show_user_topics&amp;user_id='.$search_type[2].'">'.sprintf($lang_search['Quick search show_user_topics'], pun_htmlspecialchars($search_set[0]['poster'])).'</a>';
+				$crumbs_text['search_type'] = '<a href="search.php?action=show_user_topics&amp;user_id='.$search_type[2].'">'.sprintf($lang_search['Quick search show_user_topics'], pun_htmlspecialchars($search_set[0]['poster'])).'</a>';
 			else if ($search_type[1] == 'show_user_posts')
-				$crumbs_text['search_type'] = '<a href="search2.php?action=show_user_posts&amp;user_id='.$search_type[2].'">'.sprintf($lang_search['Quick search show_user_posts'], pun_htmlspecialchars($search_set[0]['pposter'])).'</a>';
+				$crumbs_text['search_type'] = '<a href="search.php?action=show_user_posts&amp;user_id='.$search_type[2].'">'.sprintf($lang_search['Quick search show_user_posts'], pun_htmlspecialchars($search_set[0]['pposter'])).'</a>';
 			else if ($search_type[1] == 'show_subscriptions')
 			{
 				// Fetch username of subscriber
@@ -553,10 +549,10 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				else
 					message($lang_common['Bad request']);
 
-				$crumbs_text['search_type'] = '<a href="search2.php?action=show_subscriptions&amp;user_id='.$subscriber_id.'">'.sprintf($lang_search['Quick search show_subscriptions'], pun_htmlspecialchars($subscriber_name)).'</a>';
+				$crumbs_text['search_type'] = '<a href="search.php?action=show_subscriptions&amp;user_id='.$subscriber_id.'">'.sprintf($lang_search['Quick search show_subscriptions'], pun_htmlspecialchars($subscriber_name)).'</a>';
 			}
 			else
-				$crumbs_text['search_type'] = '<a href="search2.php?action='.$search_type[1].'">'.$lang_search['Quick search '.$search_type[1]].'</a>';
+				$crumbs_text['search_type'] = '<a href="search.php?action='.$search_type[1].'">'.$lang_search['Quick search '.$search_type[1]].'</a>';
 		}
 		else
 		{
@@ -578,7 +574,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				$crumbs_text['search_type'] = sprintf($lang_search['By user show as '.$show_as], pun_htmlspecialchars($author));
 			}
 
-			$crumbs_text['search_type'] = '<a href="search2.php?action=search&amp;keywords='.urlencode($keywords).'&amp;author='.urlencode($author).'&amp;forums='.$search_type[2].'&amp;search_in='.$search_type[3].'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as.'">'.$crumbs_text['search_type'].'</a>';
+			$crumbs_text['search_type'] = '<a href="search.php?action=search&amp;keywords='.urlencode($keywords).'&amp;author='.urlencode($author).'&amp;forums='.$search_type[2].'&amp;search_in='.$search_type[3].'&amp;sort_by='.$sort_by.'&amp;sort_dir='.$sort_dir.'&amp;show_as='.$show_as.'">'.$crumbs_text['search_type'].'</a>';
 		}
 
 		$page_title = array(pun_htmlspecialchars($pun_config['o_board_title']), $lang_search['Search results']);
@@ -590,7 +586,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 	<div class="inbox crumbsplus">
 		<ul class="crumbs">
 			<li><a href="index.php"><?php echo $lang_common['Index'] ?></a></li>
-			<li><span>»&#160;</span><a href="search2.php"><?php echo $crumbs_text['show_as'] ?></a></li>
+			<li><span>»&#160;</span><a href="search.php"><?php echo $crumbs_text['show_as'] ?></a></li>
 			<li><span>»&#160;</span><strong><?php echo $crumbs_text['search_type'] ?></strong></li>
 		</ul>
 		<div class="pagepost">
@@ -785,14 +781,14 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 ?>
 <div class="<?php echo ($show_as == 'topics') ? 'linksb' : 'postlinksb'; ?>">
-	<p class="conr"><?php echo ( fluxSphinx::$use === true ) ? $sphinx->getSphinxresultInfo() : '' ; ?></p>
+	<p id="sphinx_footer"><?php echo ( fluxSphinx::$use === true ) ? $sphinx->resultInfo() : '' ; ?></p>
 	<div class="inbox crumbsplus">
 		<div class="pagepost">
 			<p class="pagelink"><?php echo $paging_links ?></p>
 		</div>
 		<ul class="crumbs">
 			<li><a href="index.php"><?php echo $lang_common['Index'] ?></a></li>
-			<li><span>»&#160;</span><a href="search2.php"><?php echo $crumbs_text['show_as'] ?></a></li>
+			<li><span>»&#160;</span><a href="search.php"><?php echo $crumbs_text['show_as'] ?></a></li>
 			<li><span>»&#160;</span><strong><?php echo $crumbs_text['search_type'] ?></strong></li>
 		</ul>
 <?php echo (!empty($forum_actions) ? "\t\t".'<p class="subscribelink clearb">'.implode(' - ', $forum_actions).'</p>'."\n" : '') ?>
@@ -817,7 +813,7 @@ require PUN_ROOT.'header.php';
 <div id="searchform" class="blockform">
 	<h2><span><?php echo $lang_search['Search'] ?></span></h2>
 	<div class="box">
-		<form id="search" method="get" action="search2.php">
+		<form id="search" method="get" action="search.php">
 			<div class="inform">
 				<fieldset>
 					<legend><?php echo $lang_search['Search criteria legend'] ?></legend>
@@ -909,6 +905,7 @@ else
 					<div class="infldset">
 						<label class="conl"><?php echo $lang_search['Sort by']."\n" ?>
 						<br /><select name="sort_by">
+							<option value="-1"><?php echo $lang_sphinx['Sort by relevance'] ?></option>
 							<option value="0"><?php echo $lang_search['Sort by post time'] ?></option>
 							<option value="1"><?php echo $lang_search['Sort by author'] ?></option>
 							<option value="2"><?php echo $lang_search['Sort by subject'] ?></option>
