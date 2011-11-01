@@ -14,7 +14,6 @@ define('PUN_ROOT', dirname(__FILE__).'/');
 require PUN_ROOT.'include/common.php';
 
 // Load Sphinx
-session_start();
 require PUN_ROOT.'include/sphinx.php';
 require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
 
@@ -128,17 +127,18 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 		if (!empty($author) || !empty($keywords))
 		{
 			// Flood protection
-			if ($pun_user['last_search'] && (time() - $pun_user['last_search']) < $pun_user['g_search_flood'] && (time() - $pun_user['last_search']) >= 0)
-				message(sprintf($lang_search['Search flood'], $pun_user['g_search_flood']));
-
-			if( $keywords AND ( $keywords != $_SESSION['last_search'] OR !array_key_exists( 'last_search', $_SESSION ) ) )
+			$search_key_flood = md5( $keywords . $author . $show_as . $search_in . $sort_by . $forums . $sort_dir );
+			if( !array_key_exists( 'last_search', $_COOKIE ) || $search_key_flood != $_COOKIE['last_search'] )
 			{
+				if ($pun_user['last_search'] && (time() - $pun_user['last_search']) < $pun_user['g_search_flood'] && (time() - $pun_user['last_search']) >= 0)
+					message(sprintf($lang_search['Search flood'], $pun_user['g_search_flood']));
+
 				if (!$pun_user['is_guest'])
 					$db->query('UPDATE '.$db->prefix.'users SET last_search='.time().' WHERE id='.$pun_user['id']) or error('Unable to update user', __FILE__, __LINE__, $db->error());
 				else
 					$db->query('UPDATE '.$db->prefix.'online SET last_search='.time().' WHERE ident=\''.$db->escape(get_remote_address()).'\'' ) or error('Unable to update user', __FILE__, __LINE__, $db->error());
 
-				$_SESSION['last_search'] = $keywords;
+				fluxSphinx::setFloodCookie( $search_key_flood, (time()+2*$pun_user['g_search_flood']) );
 			}
 
 			switch ($sort_by)
@@ -334,7 +334,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 			// Count with Sphinx
 			if( fluxSphinx::$use === true )
-				$num_hits = $sphinx->result['total_found'];
+				$num_hits = $sphinx->result['total'];
 			else
 				$num_hits = count($search_ids);
 
@@ -594,6 +594,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 ?>
 <div class="linkst">
+	<?php if ( fluxSphinx::$use === true ) echo $sphinx->resultHeader(); ?>
 	<div class="inbox crumbsplus">
 		<ul class="crumbs">
 			<li><a href="index.php"><?php echo $lang_common['Index'] ?></a></li>
@@ -796,7 +797,6 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 ?>
 <div class="<?php echo ($show_as == 'topics') ? 'linksb' : 'postlinksb'; ?>">
-	<p id="sphinx_footer"><?php echo ( fluxSphinx::$use === true ) ? $sphinx->resultInfo() : '' ; ?></p>
 	<div class="inbox crumbsplus">
 		<div class="pagepost">
 			<p class="pagelink"><?php echo $paging_links ?></p>

@@ -263,18 +263,43 @@ class fluxSphinx
 
 
 	/**
-	 * Return Sphinx informations
+	 * Return Sphinx header informations
 	 */
-	public function resultInfo()
+	public function resultHeader()
+	{
+		global $lang_sphinx, $pun_user;
+
+		if ( !is_array( $this->result["words"] ) )
+			return;
+
+		if( !isset($lang_sphinx) AND isset($pun_user) )
+			require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
+
+		$return = '<div id="sphinx_header">' .
+			'<p>' . sprintf ( $lang_sphinx['Search info'], $this->keywords, $this->result['total'], $this->result['total_found'], $this->result['time'] ) . '</p>' . "\n" .
+			'<ul>';
+		foreach ( $this->result["words"] as $word => $info )
+			$return .= '<li>' . sprintf( $lang_sphinx['Search word info'], $word, $info[hits], $info[docs] ) .'</li>' . "\n";
+		$return .= '</ul>' . "\n" . '</div>';
+
+		return $return;
+	}
+
+
+
+	/**
+	 * Return Sphinx footer informations
+	 */
+	public function resultFooter()
 	{
 		global $lang_sphinx, $pun_user;
 
 		if( !isset($lang_sphinx) AND isset($pun_user) )
 			require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
 
-
-		return $lang_sphinx['Search powered by Sphinx'] . ' ' . sprintf( $lang_sphinx['Search informations'], $this->keywords, $this->result['time'] );
+		return '<p id="sphinx_footer">' . sprintf( $lang_sphinx['Search powered by Sphinx'], $this->result['time'] ) . '</p>';
 	}
+
 
 
 	/**
@@ -290,6 +315,19 @@ class fluxSphinx
 		}
 	}
 
+
+
+	/**
+	 * Write the anti-floood cookie
+	 *
+	 * @param string $hash
+	 * @param int $expires
+	 * @param string $key
+	 */
+	public static function setFloodCookie( $hash, $expires, $key = 'last_search')
+	{
+		forum_setcookie( $key, $hash, $expires );
+	}
 }
 
 ?>
