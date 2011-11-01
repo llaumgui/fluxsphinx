@@ -66,5 +66,6 @@ $sphinx_config = array(
 );
 ~~~
 * If Sphinx PHP API isn't on your system, [download it](http://code.google.com/p/sphinxsearch/source/browse/trunk/api/sphinxapi.php) and add it to include folder.
-* Add fluxbb/include/sphinx.php to include folder.
-* Replace search.php by fluxbb/search.php.
+* Add fluxbb/include/sphinx.php to __include__ folder.
+* Add fluxbb/lang to __lang__ folder.
+* Replace __search.php__ by fluxbb/search.php.
