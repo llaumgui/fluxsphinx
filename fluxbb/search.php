@@ -268,6 +268,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				$sphinx = fluxSphinx::getInstance();
 				fluxSphinx::$use = true;
 
+				$sphinx->setPermsFilter( $forums );
 				$sphinx->setSortBy( $sort_by, $sort_dir, $show_as );
 				$sphinx->setForumsFilter( $forums );
 				$sphinx->setLimit( $show_as, $pun_user );
@@ -441,42 +442,45 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 
 
 		// Prune "old" search results
-		$old_searches = array();
-		$result = $db->query('SELECT ident FROM '.$db->prefix.'online') or error('Unable to fetch online list', __FILE__, __LINE__, $db->error());
-
-		/*if ($db->num_rows($result))
+		if ( fluxSphinx::$use !== true )
 		{
-			while ($row = $db->fetch_row($result))
-				$old_searches[] = '\''.$db->escape($row[0]).'\'';
+			$old_searches = array();
+			$result = $db->query('SELECT ident FROM '.$db->prefix.'online') or error('Unable to fetch online list', __FILE__, __LINE__, $db->error());
 
-			$db->query('DELETE FROM '.$db->prefix.'search_cache WHERE ident NOT IN('.implode(',', $old_searches).')') or error('Unable to delete search results', __FILE__, __LINE__, $db->error());
+			if ($db->num_rows($result))
+			{
+				while ($row = $db->fetch_row($result))
+					$old_searches[] = '\''.$db->escape($row[0]).'\'';
+
+				$db->query('DELETE FROM '.$db->prefix.'search_cache WHERE ident NOT IN('.implode(',', $old_searches).')') or error('Unable to delete search results', __FILE__, __LINE__, $db->error());
+			}
+
+			// Fill an array with our results and search properties
+			$temp = serialize(array(
+				'search_ids'		=> serialize($search_ids),
+				'num_hits'			=> $num_hits,
+				'sort_by'			=> $sort_by,
+				'sort_dir'			=> $sort_dir,
+				'show_as'			=> $show_as,
+				'search_type'		=> $search_type
+			));
+
+			$search_id = mt_rand(1, 2147483647);
+
+			$ident = ($pun_user['is_guest']) ? get_remote_address() : $pun_user['username'];
+
+			$db->query('INSERT INTO '.$db->prefix.'search_cache (id, ident, search_data) VALUES('.$search_id.', \''.$db->escape($ident).'\', \''.$db->escape($temp).'\')') or error('Unable to insert search results', __FILE__, __LINE__, $db->error());
+
+			if ($search_type[0] != 'action')
+			{
+				$db->end_transaction();
+				$db->close();
+
+				// Redirect the user to the cached result page
+				header('Location: search.php?search_id='.$search_id);
+				exit;
+			}
 		}
-
-		// Fill an array with our results and search properties
-		$temp = serialize(array(
-			'search_ids'		=> serialize($search_ids),
-			'num_hits'			=> $num_hits,
-			'sort_by'			=> $sort_by,
-			'sort_dir'			=> $sort_dir,
-			'show_as'			=> $show_as,
-			'search_type'		=> $search_type
-		));
-
-		$search_id = mt_rand(1, 2147483647);
-
-		$ident = ($pun_user['is_guest']) ? get_remote_address() : $pun_user['username'];
-
-		$db->query('INSERT INTO '.$db->prefix.'search_cache (id, ident, search_data) VALUES('.$search_id.', \''.$db->escape($ident).'\', \''.$db->escape($temp).'\')') or error('Unable to insert search results', __FILE__, __LINE__, $db->error());
-
-		if ($search_type[0] != 'action')
-		{
-			$db->end_transaction();
-			$db->close();
-
-			// Redirect the user to the cached result page
-			header('Location: search.php?search_id='.$search_id);
-			exit;
-		}*/
 	}
 
 	$forum_actions = array();

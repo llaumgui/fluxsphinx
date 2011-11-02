@@ -150,6 +150,41 @@ class fluxSphinx
 
 
 	/**
+	 * Set SphinxClient filter for user permission
+	 *
+	 * @param array $&forums
+	 *
+	 */
+	public function setPermsfilter( array &$forums )
+	{
+		global $db, $pun_user;
+
+		// Get forums disallowed
+		$result = $db->query('SELECT forum_id FROM '.$db->prefix.'forum_perms WHERE group_id='.$pun_user['g_id'].' AND read_forum = 0');
+		$disallowed = array();
+		while ($temp = $db->fetch_assoc($result))
+			$disallowed[] = $temp['forum_id'];
+
+		// Remove from $forums
+		if ( !empty( $forums ) )
+		{
+			$forums_allowed = array();
+			foreach ( $forums as $forum )
+			{
+				if ( !array_key_exists( $forum, $disallowed ) )
+					$forums_allowed[] = $forum;
+			}
+			$forums = $forums_allowed;
+		}
+
+		// Exlude from Sphinx
+		if ( !empty( $disallowed ) )
+			$this->client->SetFilter( 'forum_id', $disallowed, true );
+	}
+
+
+
+	/**
 	 * Set SphinxClient filter by authors ids
 	 *
 	 * @param array $forums
