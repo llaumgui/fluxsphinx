@@ -122,8 +122,9 @@ class fluxSphinx
 	 *
 	 * @param string $show_as
 	 * @param array $pun_user
+	 * @param int $max_matches
 	 */
-	public function setLimit( $show_as, $pun_user )
+	public function setLimit( $show_as, $pun_user, $max_matches=1000 )
 	{
 		// Set limit
 		$per_page = ($show_as == 'posts') ? $pun_user['disp_posts'] : $pun_user['disp_topics'];
@@ -131,7 +132,7 @@ class fluxSphinx
 		$p = (!isset($_GET['p']) || $_GET['p'] <= 1) ? 1 : intval($_GET['p']);
 		$start_from = $per_page * ($p - 1);
 
-		$this->client->setLimits( (int)$start_from, (int)$per_page );
+		$this->client->setLimits( (int)$start_from, (int)$per_pagei, (int)$max_matches );
 	}
 
 
