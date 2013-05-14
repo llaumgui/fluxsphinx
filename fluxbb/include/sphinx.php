@@ -132,7 +132,7 @@ class fluxSphinx
 		$p = (!isset($_GET['p']) || $_GET['p'] <= 1) ? 1 : intval($_GET['p']);
 		$start_from = $per_page * ($p - 1);
 
-		$this->client->setLimits( (int)$start_from, (int)$per_pagei, (int)$max_matches );
+		$this->client->setLimits( (int)$start_from, (int)$per_page, (int)$max_matches );
 	}
 
 
