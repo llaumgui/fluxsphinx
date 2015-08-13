@@ -142,7 +142,7 @@ class fluxSphinx
 	 *
 	 * @param array $forums
 	 */
-	public function setForumsfilter( array $forums )
+	public function setForumsFilter( array $forums )
 	{
 		if ( !empty( $forums ) )
 			$this->client->SetFilter( 'forum_id', $forums );
