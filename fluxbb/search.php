@@ -170,7 +170,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			}
 
 			// If it's a search for keywords
-			if ($keywords)
+			if ($keywords || ($author && $author != 'guest' && $author != utf8_strtolower($lang_common['Guest'])))
 			{
 				// split the keywords into words
 				$keywords_array = split_words($keywords, false);
