@@ -1,10 +1,13 @@
 <?php
 
 /**
- * Copyright (C) 2008-2011 FluxBB
+ * Copyright (C) 2008-2012 FluxBB
  * based on code by Rickard Andersson copyright (C) 2002-2008 PunBB
- * Modification to implement Sphinx Search Engine by Guillaume Kulakowski (C) 2011
  * License: http://www.gnu.org/licenses/gpl.html GPL version 2 or higher
+ *
+ * FluxSphinx
+ * Copyright (C) 2011-2015 Guillaume Kulakowski
+ * Modification to implement Sphinx Search Engine.
  */
 
 // The contents of this file are very much inspired by the file search.php
@@ -13,7 +16,7 @@
 define('PUN_ROOT', dirname(__FILE__).'/');
 require PUN_ROOT.'include/common.php';
 
-// Load Sphinx
+// Load FluxSphinx
 require PUN_ROOT.'include/sphinx.php';
 require PUN_ROOT.'lang/'.$pun_user['language'].'/sphinx.php';
 
@@ -23,9 +26,9 @@ require PUN_ROOT.'lang/'.$pun_user['language'].'/forum.php';
 
 
 if ($pun_user['g_read_board'] == '0')
-	message($lang_common['No view']);
+	message($lang_common['No view'], false, '403 Forbidden');
 else if ($pun_user['g_search'] == '0')
-	message($lang_search['No search permission']);
+	message($lang_search['No search permission'], false, '403 Forbidden');
 
 require PUN_ROOT.'include/search_idx.php';
 
@@ -49,7 +52,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 	{
 		$search_id = intval($_GET['search_id']);
 		if ($search_id < 1)
-			message($lang_common['Bad request']);
+			message($lang_common['Bad request'], false, '404 Not Found');
 	}
 	// If it's a regular search (keywords and/or author)
 	else if ($action == 'search')
@@ -78,21 +81,21 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 	{
 		$user_id = (isset($_GET['user_id'])) ? intval($_GET['user_id']) : $pun_user['id'];
 		if ($user_id < 2)
-			message($lang_common['Bad request']);
+			message($lang_common['Bad request'], false, '404 Not Found');
 
 		// Subscribed topics can only be viewed by admins, moderators and the users themselves
 		if ($action == 'show_subscriptions' && !$pun_user['is_admmod'] && $user_id != $pun_user['id'])
-			message($lang_common['No permission']);
+			message($lang_common['No permission'], false, '403 Forbidden');
 	}
 	else if ($action == 'show_recent')
 		$interval = isset($_GET['value']) ? intval($_GET['value']) : 86400;
 	else if ($action == 'show_replies')
 	{
 		if ($pun_user['is_guest'])
-			message($lang_common['Bad request']);
+			message($lang_common['Bad request'], false, '404 Not Found');
 	}
 	else if ($action != 'show_new' && $action != 'show_unanswered')
-		message($lang_common['Bad request']);
+		message($lang_common['Bad request'], false, '404 Not Found');
 
 
 	// If a valid search_id was supplied we attempt to fetch the search results from the db
@@ -130,15 +133,15 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			$search_key_flood = md5( $keywords . $author . $show_as . $search_in . $sort_by . $forums . $sort_dir );
 			if( !array_key_exists( 'last_search', $_COOKIE ) || $search_key_flood != $_COOKIE['last_search'] )
 			{
-				if ($pun_user['last_search'] && (time() - $pun_user['last_search']) < $pun_user['g_search_flood'] && (time() - $pun_user['last_search']) >= 0)
-					message(sprintf($lang_search['Search flood'], $pun_user['g_search_flood']));
+			if ($pun_user['last_search'] && (time() - $pun_user['last_search']) < $pun_user['g_search_flood'] && (time() - $pun_user['last_search']) >= 0)
+				message(sprintf($lang_search['Search flood'], $pun_user['g_search_flood'], $pun_user['g_search_flood'] - (time() - $pun_user['last_search'])));
 
-				if (!$pun_user['is_guest'])
-					$db->query('UPDATE '.$db->prefix.'users SET last_search='.time().' WHERE id='.$pun_user['id']) or error('Unable to update user', __FILE__, __LINE__, $db->error());
-				else
-					$db->query('UPDATE '.$db->prefix.'online SET last_search='.time().' WHERE ident=\''.$db->escape(get_remote_address()).'\'' ) or error('Unable to update user', __FILE__, __LINE__, $db->error());
+			if (!$pun_user['is_guest'])
+				$db->query('UPDATE '.$db->prefix.'users SET last_search='.time().' WHERE id='.$pun_user['id']) or error('Unable to update user', __FILE__, __LINE__, $db->error());
+			else
+				$db->query('UPDATE '.$db->prefix.'online SET last_search='.time().' WHERE ident=\''.$db->escape(get_remote_address()).'\'' ) or error('Unable to update user', __FILE__, __LINE__, $db->error());
 
-				fluxSphinx::setFloodCookie( $search_key_flood, (time()+2*$pun_user['g_search_flood']) );
+			fluxSphinx::setFloodCookie( $search_key_flood, (time()+2*$pun_user['g_search_flood']) );
 			}
 
 			switch ($sort_by)
@@ -169,8 +172,17 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 					break;
 			}
 
+            // Load Sphinx
+			$sphinx = fluxSphinx::getInstance();
+			fluxSphinx::$use = true;
+
+			$sphinx->setPermsFilter( $forums );
+			$sphinx->setSortBy( $sort_by, $sort_dir, $show_as );
+			$sphinx->setForumsFilter( $forums );
+			$sphinx->setLimit( $show_as, $pun_user );
+
 			// If it's a search for keywords
-			if ($keywords || ($author && $author != 'guest' && $author != utf8_strtolower($lang_common['Guest'])))
+			if ($keywords)
 			{
 				// split the keywords into words
 				$keywords_array = split_words($keywords, false);
@@ -184,8 +196,8 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				$word_count = 0;
 				$match_type = 'and';
 
-				// Replace by Sphinx
-				/* $sort_data = array();
+				/*
+				$sort_data = array();
 				foreach ($keywords_array as $cur_word)
 				{
 					switch ($cur_word)
@@ -250,7 +262,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 					}
 				}
 
-				// Sort the results - annoyingly array_multisort re-indexes arrays with numeric keys, so we need to split the keys out into a seperate array then combine them again after
+				// Sort the results - annoyingly array_multisort re-indexes arrays with numeric keys, so we need to split the keys out into a separate array then combine them again after
 				$post_ids = array_keys($keyword_results);
 				$topic_ids = array_values($keyword_results);
 
@@ -262,16 +274,8 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				for ($i = 0;$i < $num_results;$i++)
 					$keyword_results[$post_ids[$i]] = $topic_ids[$i];
 
-				unset($sort_data, $post_ids, $topic_ids); */
-
-				// Load Sphinx
-				$sphinx = fluxSphinx::getInstance();
-				fluxSphinx::$use = true;
-
-				$sphinx->setPermsFilter( $forums );
-				$sphinx->setSortBy( $sort_by, $sort_dir, $show_as );
-				$sphinx->setForumsFilter( $forums );
-				$sphinx->setLimit( $show_as, $pun_user );
+				unset($sort_data, $post_ids, $topic_ids);
+				*/
 			}
 
 			// If it's a search for author name (and that author name isn't Guest)
@@ -294,33 +298,38 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 					while ($row = $db->fetch_row($result))
 						$user_ids[] = $row[0];
 
-					/*$result = $db->query('SELECT p.id AS post_id, p.topic_id FROM '.$db->prefix.'posts AS p INNER JOIN '.$db->prefix.'topics AS t ON t.id=p.topic_id LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) AND p.poster_id IN('.implode(',', $user_ids).')'.$forum_sql.' ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch matched posts list', __FILE__, __LINE__, $db->error());
+					/*
+					$result = $db->query('SELECT p.id AS post_id, p.topic_id FROM '.$db->prefix.'posts AS p INNER JOIN '.$db->prefix.'topics AS t ON t.id=p.topic_id LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) AND p.poster_id IN('.implode(',', $user_ids).')'.$forum_sql.' ORDER BY '.$sort_by_sql.' '.$sort_dir) or error('Unable to fetch matched posts list', __FILE__, __LINE__, $db->error());
 					while ($temp = $db->fetch_assoc($result))
-						$author_results[$temp['post_id']] = $temp['topic_id'];*/
+						$author_results[$temp['post_id']] = $temp['topic_id'];
+					*/
 
 					$db->free_result($result);
-					// Do a fiulter by user
+
+					// Do a Sphinx filter by user
 					$sphinx->setAuthorsFilter( $user_ids );
 				}
 			}
 
 			// If we searched for both keywords and author name we want the intersection between the results
-			/*if ($author && $keywords)
+			/*
+			if ($author && $keywords)
 			{
 				$search_ids = array_intersect_assoc($keyword_results, $author_results);
 				$search_type = array('both', array($keywords, pun_trim($_GET['author'])), implode(',', $forums), $search_in);
 			}
-			else */if ($keywords)
+			else */ if ($keywords)
 			{
+				//$search_ids = $keyword_results;
 				$sphinx->query( $keywords, $search_in );
 				$search_ids = $sphinx->toSearchIds();
-
 				$search_type = array('keywords', $keywords, implode(',', $forums), $search_in);
-
 			}
 			else
 			{
-				$search_ids = $author_results;
+				//$search_ids = $author_results;
+                $sphinx->query( $keywords, $search_in );
+				$search_ids = $sphinx->toSearchIds();
 				$search_type = array('author', pun_trim($_GET['author']), implode(',', $forums), $search_in);
 			}
 
@@ -337,8 +346,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			if( fluxSphinx::$use === true )
 				$num_hits = $sphinx->result['total'];
 			else
-				$num_hits = count($search_ids);
-
+			$num_hits = count($search_ids);
 			if (!$num_hits)
 				message($lang_search['No hits']);
 		}
@@ -354,7 +362,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			if ($action == 'show_new')
 			{
 				if ($pun_user['is_guest'])
-					message($lang_common['No permission']);
+					message($lang_common['No permission'], false, '403 Forbidden');
 
 				$result = $db->query('SELECT t.id FROM '.$db->prefix.'topics AS t LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) AND t.last_post>'.$pun_user['last_visit'].' AND t.moved_to IS NULL'.(isset($_GET['fid']) ? ' AND t.forum_id='.intval($_GET['fid']) : '').' ORDER BY t.last_post DESC') or error('Unable to fetch topic list', __FILE__, __LINE__, $db->error());
 				$num_hits = $db->num_rows($result);
@@ -391,7 +399,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				if (!$num_hits)
 					message($lang_search['No user posts']);
 
-				// Pass on the user ID so that we can later know whos posts we're searching for
+				// Pass on the user ID so that we can later know whose posts we're searching for
 				$search_type[2] = $user_id;
 			}
 			// If it's a search for topics by a specific user ID
@@ -403,14 +411,14 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				if (!$num_hits)
 					message($lang_search['No user topics']);
 
-				// Pass on the user ID so that we can later know whos topics we're searching for
+				// Pass on the user ID so that we can later know whose topics we're searching for
 				$search_type[2] = $user_id;
 			}
 			// If it's a search for subscribed topics
 			else if ($action == 'show_subscriptions')
 			{
 				if ($pun_user['is_guest'])
-					message($lang_common['Bad request']);
+					message($lang_common['Bad request'], false, '404 Not Found');
 
 				$result = $db->query('SELECT t.id FROM '.$db->prefix.'topics AS t INNER JOIN '.$db->prefix.'topic_subscriptions AS s ON (t.id=s.topic_id AND s.user_id='.$user_id.') LEFT JOIN '.$db->prefix.'forum_perms AS fp ON (fp.forum_id=t.forum_id AND fp.group_id='.$pun_user['g_id'].') WHERE (fp.read_forum IS NULL OR fp.read_forum=1) ORDER BY t.last_post DESC') or error('Unable to fetch topic list', __FILE__, __LINE__, $db->error());
 				$num_hits = $db->num_rows($result);
@@ -438,48 +446,47 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 			$db->free_result($result);
 		}
 		else
-			message($lang_common['Bad request']);
+			message($lang_common['Bad request'], false, '404 Not Found');
 
 
 		// Prune "old" search results
 		if ( fluxSphinx::$use !== true )
 		{
-			$old_searches = array();
-			$result = $db->query('SELECT ident FROM '.$db->prefix.'online') or error('Unable to fetch online list', __FILE__, __LINE__, $db->error());
+		$old_searches = array();
+		$result = $db->query('SELECT ident FROM '.$db->prefix.'online') or error('Unable to fetch online list', __FILE__, __LINE__, $db->error());
 
-			if ($db->num_rows($result))
-			{
-				while ($row = $db->fetch_row($result))
-					$old_searches[] = '\''.$db->escape($row[0]).'\'';
+		if ($db->num_rows($result))
+		{
+			while ($row = $db->fetch_row($result))
+				$old_searches[] = '\''.$db->escape($row[0]).'\'';
 
-				$db->query('DELETE FROM '.$db->prefix.'search_cache WHERE ident NOT IN('.implode(',', $old_searches).')') or error('Unable to delete search results', __FILE__, __LINE__, $db->error());
-			}
+			$db->query('DELETE FROM '.$db->prefix.'search_cache WHERE ident NOT IN('.implode(',', $old_searches).')') or error('Unable to delete search results', __FILE__, __LINE__, $db->error());
+		}
 
-			// Fill an array with our results and search properties
-			$temp = serialize(array(
-				'search_ids'		=> serialize($search_ids),
-				'num_hits'			=> $num_hits,
-				'sort_by'			=> $sort_by,
-				'sort_dir'			=> $sort_dir,
-				'show_as'			=> $show_as,
-				'search_type'		=> $search_type
-			));
+		// Fill an array with our results and search properties
+		$temp = serialize(array(
+			'search_ids'		=> serialize($search_ids),
+			'num_hits'			=> $num_hits,
+			'sort_by'			=> $sort_by,
+			'sort_dir'			=> $sort_dir,
+			'show_as'			=> $show_as,
+			'search_type'		=> $search_type
+		));
+		$search_id = mt_rand(1, 2147483647);
 
-			$search_id = mt_rand(1, 2147483647);
+		$ident = ($pun_user['is_guest']) ? get_remote_address() : $pun_user['username'];
 
-			$ident = ($pun_user['is_guest']) ? get_remote_address() : $pun_user['username'];
+		$db->query('INSERT INTO '.$db->prefix.'search_cache (id, ident, search_data) VALUES('.$search_id.', \''.$db->escape($ident).'\', \''.$db->escape($temp).'\')') or error('Unable to insert search results', __FILE__, __LINE__, $db->error());
 
-			$db->query('INSERT INTO '.$db->prefix.'search_cache (id, ident, search_data) VALUES('.$search_id.', \''.$db->escape($ident).'\', \''.$db->escape($temp).'\')') or error('Unable to insert search results', __FILE__, __LINE__, $db->error());
+		if ($search_type[0] != 'action')
+		{
+			$db->end_transaction();
+			$db->close();
 
-			if ($search_type[0] != 'action')
-			{
-				$db->end_transaction();
-				$db->close();
-
-				// Redirect the user to the cached result page
-				header('Location: search.php?search_id='.$search_id);
-				exit;
-			}
+			// Redirect the user to the cached result page
+			header('Location: search.php?search_id='.$search_id);
+			exit;
+		}
 		}
 	}
 
@@ -528,10 +535,10 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 		}
 		else
 		{
-			$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?search_id='.$search_id);
+		$paging_links = '<span class="pages-label">'.$lang_common['Pages'].' </span>'.paginate($num_pages, $p, 'search.php?search_id='.$search_id);
 
-			// throw away the first $start_from of $search_ids, only keep the top $per_page of $search_ids
-			$search_ids = array_slice($search_ids, $start_from, $per_page);
+		// throw away the first $start_from of $search_ids, only keep the top $per_page of $search_ids
+		$search_ids = array_slice($search_ids, $start_from, $per_page);
 		}
 
 		// Run the query and fetch the results
@@ -562,7 +569,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				if ($db->num_rows($result))
 					$subscriber_name = $db->result($result);
 				else
-					message($lang_common['Bad request']);
+					message($lang_common['Bad request'], false, '404 Not Found');
 
 				$crumbs_text['search_type'] = '<a href="search.php?action=show_subscriptions&amp;user_id='.$subscriber_id.'">'.sprintf($lang_search['Quick search show_subscriptions'], pun_htmlspecialchars($subscriber_name)).'</a>';
 			}
@@ -623,7 +630,7 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 	<h2><span><?php echo $lang_search['Search results'] ?></span></h2>
 	<div class="box">
 		<div class="inbox">
-			<table cellspacing="0">
+			<table>
 			<thead>
 				<tr>
 					<th class="tcl" scope="col"><?php echo $lang_common['Topic'] ?></th>
@@ -680,7 +687,6 @@ if (isset($_GET['action']) || isset($_GET['search_id']))
 				// Hightlight
 				if ( fluxSphinx::$use === true )
 					$sphinx->highlight( $message );
-
 				$pposter = pun_htmlspecialchars($cur_search['pposter']);
 
 				if ($cur_search['poster_id'] > 1)
@@ -865,16 +871,25 @@ if ($pun_config['o_search_all_forums'] == '1' || $pun_user['is_admmod'])
 		if ($cur_forum['cid'] != $cur_category) // A new category since last iteration?
 		{
 			if ($cur_category)
+			{
+				echo "\t\t\t\t\t\t\t\t".'</div>'."\n";
 				echo "\t\t\t\t\t\t\t".'</fieldset>'."\n";
+			}
 
 			echo "\t\t\t\t\t\t\t".'<fieldset><legend><span>'.pun_htmlspecialchars($cur_forum['cat_name']).'</span></legend>'."\n";
+			echo "\t\t\t\t\t\t\t\t".'<div class="rbox">';
 			$cur_category = $cur_forum['cid'];
 		}
 
-		echo "\t\t\t\t\t\t\t\t".'<div class="checklist-item"><span class="fld-input"><input type="checkbox" name="forums[]" id="forum-'.$cur_forum['fid'].'" value="'.$cur_forum['fid'].'" /></span> <label for="forum-'.$cur_forum['fid'].'">'.pun_htmlspecialchars($cur_forum['forum_name']).'</label></div>'."\n";
+		echo "\t\t\t\t\t\t\t\t".'<label><input type="checkbox" name="forums[]" id="forum-'.$cur_forum['fid'].'" value="'.$cur_forum['fid'].'" />'.pun_htmlspecialchars($cur_forum['forum_name']).'</label>'."\n";
 	}
 
-	echo "\t\t\t\t\t\t\t".'</fieldset>'."\n";
+	if ($cur_category)
+	{
+		echo "\t\t\t\t\t\t\t\t".'</div>'."\n";
+		echo "\t\t\t\t\t\t\t".'</fieldset>'."\n";
+	}
+
 	echo "\t\t\t\t\t\t".'</div>'."\n";
 	echo "\t\t\t\t\t\t".'</div>'."\n";
 }

@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Copyright (C) 2011 Guillaume Kulakowski
- * License: http://www.gnu.org/licenses/gpl.html GPL version 2 or higher
+ * Copyright (C) 2011-2015 Guillaume Kulakowski
+ * License: http://www.gnu.org/licenses/gpl.html GPL version 2
  */
 
 class fluxSphinx
@@ -44,9 +44,6 @@ class fluxSphinx
 	public $sortDir = 'DESC';
 
 
-
-
-
 	/**
 	 * Private constructor to prevent non-singleton use
 	 */
@@ -84,7 +81,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Don't allow clone
 	 *
@@ -94,7 +90,6 @@ class fluxSphinx
 	{
 		throw new Exception ('Clone is not allowed');
 	}
-
 
 
 	/**
@@ -110,8 +105,6 @@ class fluxSphinx
 		}
 		return self::$instance;
 	}
-
-
 
 
 
@@ -136,7 +129,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Set SphinxClient filter by forums ids
 	 *
@@ -147,7 +139,6 @@ class fluxSphinx
 		if ( !empty( $forums ) )
 			$this->client->SetFilter( 'forum_id', $forums );
 	}
-
 
 
 	/**
@@ -184,7 +175,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Set SphinxClient filter by authors ids
 	 *
@@ -195,7 +185,6 @@ class fluxSphinx
 		if ( !empty( $user_ids ) )
 			$this->client->SetFilter( 'poster_id', $user_ids );
 	}
-
 
 
 	/**
@@ -247,7 +236,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Do SphinxClient query
 	 *
@@ -275,8 +263,6 @@ class fluxSphinx
 
 
 
-
-
 /* ********************************************************************* Misc */
 
 	/**
@@ -295,7 +281,6 @@ class fluxSphinx
 
 		return $search_ids;
 	}
-
 
 
 	/**
@@ -322,7 +307,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Return Sphinx footer informations
 	 */
@@ -335,7 +319,6 @@ class fluxSphinx
 
 		return '<p id="sphinx_footer">' . sprintf( $lang_sphinx['Search powered by Sphinx'], $this->result['time'] ) . '</p>';
 	}
-
 
 
 	/**
@@ -352,7 +335,6 @@ class fluxSphinx
 	}
 
 
-
 	/**
 	 * Write the anti-floood cookie
 	 *
@@ -365,5 +347,3 @@ class fluxSphinx
 		forum_setcookie( $key, $hash, $expires );
 	}
 }
-
-?>
