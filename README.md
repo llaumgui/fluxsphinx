@@ -1,19 +1,14 @@
-FluxSphinx
-==========
+# FluxSphinx
 FluxSphinx is an implementation of the [Sphinx](http://sphinxsearch.com/) Search Engine for the [FluxBB](http://fluxbb.org/) forum.
 
 FluxSphinx aims to provide an alternernative for the native FluxBB's search engine and provides a fulltext search for high-volume forums.
 
-
-Requirements
-------------
+## Requirements
 * PHP 5.3.3 or newer
 * Sphinx 2.0 or newer
 * FluxBB 1.4.x
 
-
-Installation
-------------
+## Installation
 
 ### Step 1: Install Sphinx
 [Install Sphinx](http://sphinxsearch.com/docs/current.html#installation) on your server (check if a package is avalaible for your distro).
@@ -51,13 +46,11 @@ OR
 /etc/init.d/searchd start
 ```
 
-
 ### Step 4: Configure Cronjobs
 ```bash
 3,18,33,48 * * * * /usr/bin/indexer --quiet --config /etc/sphinx/sphinx.conf fluxbb_search_posts_delta --rotate >/dev/null 2>&1
 30 4 * * * /usr/bin/indexer --quiet --config /etc/sphinx/sphinx.conf fluxbb_search_posts_main --rotate >/dev/null 2>&1; /usr/bin/indexer --quiet --config /etc/sphinx/sphinx.conf fluxbb_search_posts_delta --rotate >/dev/null 2>&1
 ```
-
 
 ### Step 5: Setup FluxBB
 * Install SphinxClient from [Sphinx API PHP](https://github.com/sphinxsearch/sphinx/blob/master/api/sphinxapi.php) (put on include folder) or [from PECL](http://pecl.php.net/package/sphinx).
